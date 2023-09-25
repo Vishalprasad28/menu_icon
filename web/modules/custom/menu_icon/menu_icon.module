@@ -1,0 +1,184 @@
+<?php
+
+/**
+ * @file
+ * Primary module hooks for menu icon module.
+ */
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\menu_link_content\Plugin\Menu\MenuLinkContent;
+
+/**
+ * Implements hook_preprocess_menu().
+ */
+function menu_icon_preprocess_menu(&$variables) {
+  foreach ($variables['items'] as &$item) {
+    if ($item['original_link'] instanceof MenuLinkContent) {
+      menu_icon_preprocess_menu_item_recursive($item);
+      $variables['directory'] = "modules/custom/menu_icon";
+    }
+  }
+}
+  
+/**
+ * Helper function to recursively preprocess hierarchical menus.
+ *
+ * @param array $item
+ *   Menu item array.
+ */
+function menu_icon_preprocess_menu_item_recursive(&$item) {
+  if (empty($item['original_link'])) {
+    return;
+  }
+
+  $link_plugin = $item['original_link']->getPluginDefinition();
+
+  if (empty($link_plugin) || empty($link_plugin['metadata']['entity_id'])) {
+    return;
+  }
+  // Drupal\menu_link_content\Plugin\Menu\MenuLinkContent::
+  $data = get_menu_icon($item);
+  $item['icon_url'] = isset($data['icon_target_id']) ? get_file_uri($data['icon_target_id']) : NULL;
+  $item['additional_data'] = $data;
+
+  $mlid = $link_plugin['metadata']['entity_id'];
+  $item['attributes']->addClass('menu-icon');
+  $item['attributes']->addClass('menu-icon-' . $mlid);
+
+  if (!empty($item['below'])) {
+    foreach ($item['below'] as $key => &$value) {
+      menu_icon_preprocess_menu_item_recursive($value);
+    }
+  }
+}
+
+function get_file_uri($id) {
+  $file = \Drupal::entityTypeManager()->getStorage('file')->load($id);
+
+  return $file->getFileUri();
+}
+
+function get_menu_icon(array $item) {
+    $id = $item['original_link']->getPluginDefinition()["metadata"]['entity_id'];
+    $menu_db_handler = \Drupal::service('menu_icon.db_handler');
+    $data = $menu_db_handler->getMenuIconData($id);
+
+    return $data;
+}
+
+/**
+ * Implemments hook_form_FORM_ID_alter().
+ */
+function menu_icon_form_menu_link_content_menu_link_content_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  \Drupal::messenger()->addMessage($form_id);
+
+  $menu_db_handler = \Drupal::service('menu_icon.db_handler');
+  $data = $menu_db_handler->getMenuIconData($form_state->getFormObject()->getEntity()->id());
+  // dd($data);
+  $today = date('Y-m-d', time());
+  $dir = 'public://menu_icons/' . $today;
+  if (!file_exists($dir)) {
+    mkdir($dir, 0777, true);
+  }
+
+  $form['menu_icon_module'] = [
+    '#type' => 'details',
+    '#title' => t('Menu Icon Configurations'),
+    '#open' => FALSE,
+  ];
+
+  $form['menu_icon_module']['menu_icon'] = [
+    '#type' => 'managed_file',
+    '#title' => t('Upload an Image icon'),
+    '#upload_location' => $dir,
+    '#description' => t('Upload your image.'),
+    '#attributes' => [
+      'class' => ['menu_icon'],
+    ],
+    '#default_value' => isset($data['icon_target_id']) ? [$data['icon_target_id']] : NULL,
+    '#upload_validators' => [
+      'file_validate_extensions' => ['jpg jpeg png svg'],
+      'file_validate_size' => [25600000],
+      "file_validate_image_resolution" => [
+        0 => "40x40",
+        1 => "10x10"
+      ],
+    ],
+    "#multiple" => false,
+    "#accept" => "image/*",
+    "#preview_image_style" => "thumbnail",
+  ];
+  $class_list = implode("\r\n", explode(" ", $data['class_list'] ?? ''));
+  $form['menu_icon_module']['class_list'] = [
+    '#type' => 'textarea',
+    '#title' => t('Additional menu item class'),
+    '#description' => t('Add the classes, each class name in a new line.'),
+    '#default_value' => $class_list,
+  ];
+  
+  $form['menu_icon_module']['show_title'] = [
+    '#type' => 'checkbox',
+    '#title' => t("Show this menu's title"),
+    '#description' => t('Whether to display this menu title or not'),
+    '#default_value' => $data['show_title'] ?? 1,
+  ];
+
+  $form['actions']['submit']['#submit'][] = 'menu_icon_save_image';
+}
+
+/**
+ * Callback function to store icon data to database.
+ * 
+ * @param array $form
+ *   Takes the form build array.
+ * @param \Drupal\Core\Form\FormStateInterface $form_state
+ *   Takes the form state instance of the form.
+ */
+function menu_icon_save_image($form, FormStateInterface $form_state) {
+  $file_id = $form_state->getValue('menu_icon')[0] ?? NULL;
+  if ($file_id) {
+    $file = \Drupal::entityTypeManager()->getStorage('file')->load($file_id);
+    $file->setPermanent();
+    $file->save();
+  }
+  $class_list = explode("\r\n", $form_state->getValue('class_list'));
+  $class_list = implode(" ", $class_list);
+
+  $data = [
+    'menu_item_id' => $form_state->getFormObject()->getEntity()->id(),
+    'icon_target_id' => $file_id,
+    'icon_alt' => $form_state->getValue('title')[0]['value'],
+    'class_list' => $class_list,
+    'show_title' => $form_state->getValue('show_title'),
+  ];
+
+  $menu_db_handler = \Drupal::service('menu_icon.db_handler');
+  $menu_db_handler->setMenuIconData($data);
+}
+
+/**
+ * Implements hook_theme().
+ */
+function menu_icon_theme() {
+  return [
+    'menu__with__icon' => [
+      'template' => 'menu--with--icon',
+      'base hook' => 'menu',
+    ]
+  ];
+}
+
+/**
+ * Implements hook_theme_suggestion_menu_alter().
+ */
+function menu_icon_theme_suggestions_menu_alter(array &$suggestions, array $variables) {
+  $temp = 0;
+  foreach ($variables['items'] as $item) {
+    if ($item['original_link'] instanceof MenuLinkContent) {
+      $temp++;
+    }
+  }
+  if ($temp == count($variables['items'])) {
+    $suggestions[] = 'menu__with__icon';
+  }
+}

@@ -1,0 +1,4 @@
+services:
+  menu_icon.db_handler:
+    class: Drupal\menu_icon\MenuIconDatabaseHandler
+    arguments: ['@entity_type.manager', '@database']

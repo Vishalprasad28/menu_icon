@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * @file
+ * Contains the required hook for install/uninstall of module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function menu_icon_schema() {
+	$schema['menu_icons'] = [
+		'description' => 'description pour la table post',
+		'fields' => [
+			'id' => [
+				'description' => 'id of the row.',
+				'type' => 'serial',
+				'size' => 'small',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+			],
+			'menu_item_id' => [
+				'type' => 'int',
+				'unsigned' => TRUE,
+        'not null' => TRUE,
+				'unique' => TRUE
+			],
+			'icon_target_id' => [
+				'type' => 'int',
+				'unsigned' => TRUE,
+        'not null' => FALSE,
+			],
+			'icon_alt' => [
+        'type' => 'varchar',
+				'length' => 255,
+				'not null' => FALSE,
+        'default' => '', 
+			],
+			'class_list' => [
+				'type' => 'text', 
+        'size' => 'big',
+        'not null' => FALSE,
+        'description' => 'stores the message of user',
+			],
+		'show_title' => [
+		  'type' => 'int',
+			'not null' => TRUE,
+			'default' => 1,
+			'unsigned' => TRUE,
+			],
+		],
+		'primary key' => ['id'],
+	];
+
+	return $schema;
+    
+}

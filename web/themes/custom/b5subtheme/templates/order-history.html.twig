@@ -1,0 +1,26 @@
+{% if details is empty %}
+  <p>{{full_name}} has not made any order yet.</p>
+  {% else %}
+    <p>Hello <strong>{{full_name}}</strong> </p>
+<h5> Your Order Details are: </h4>
+{% for detail in details %}
+    <div>
+      <div>
+        <span>Order time: <strong>{{detail.order_time}}</strong></span>
+        <span>
+        {% if detail.processed == '0' %}
+            Not Processed
+        {% elseif detail.processed == '1' %}
+            Shipped
+        {% elseif detail.processed == '2' %}
+            Placed
+        {% endif %}
+        </span>
+      </div>
+      <p>Quantity: <strong>{{detail.quantity}}</strong></p>
+      <h6>message:</h6>
+      <p>{{detail.message}}</p>
+    </div>
+    <hr>
+{% endfor %}
+{% endif %}

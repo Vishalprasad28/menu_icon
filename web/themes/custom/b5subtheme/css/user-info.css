@@ -1,0 +1,20 @@
+.user-info img {
+	width: 70px;
+	height: 70px;
+	object-fit: cover !important;
+	object-position: center;
+	border-radius: 50%;
+}
+.user-info {
+  display: flex;
+	gap: 0.5rem;
+	align-items: center;
+}
+.user-related-links {
+  text-decoration: none;
+	color: rgb(33, 37, 41);
+	transition: all 0.5s;
+}
+.user-related-links:hover {
+	color: #003CC5;
+}

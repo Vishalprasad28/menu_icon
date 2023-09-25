@@ -1,0 +1,22 @@
+name: my-first-drupal9-app
+recipe: drupal9
+config:
+  webroot: web
+services:
+  appserver:
+    build:
+      - "mkdir -p /app/coder && cd /app/coder && composer require drupal/coder:8.2.12"
+      - "/app/coder/vendor/bin/phpcs --config-set installed_paths /app/coder/vendor/drupal/coder/coder_sniffer"
+  mail:
+    type: mailhog
+tooling:
+  phpcs:
+    service: appserver
+    cmd: "/app/vendor/bin/phpcs --standard=Drupal,DrupalPractice --extensions=yml,php,install,module,twig"
+    options:
+    description: Run phpcs for given folder or file.
+  phpcbf:
+      service: appserver
+      cmd: "/app/vendor/bin/phpcbf --standard=Drupal,DrupalPractice --extensions=yml,php,install,module,twig"
+      options:
+      description: Hello world
