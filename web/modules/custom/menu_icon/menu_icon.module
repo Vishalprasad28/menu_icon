@@ -36,11 +36,10 @@ function menu_icon_preprocess_menu_item_recursive(&$item) {
   if (empty($link_plugin) || empty($link_plugin['metadata']['entity_id'])) {
     return;
   }
-  // Drupal\menu_link_content\Plugin\Menu\MenuLinkContent::
   $data = get_menu_icon($item);
   $item['icon_url'] = isset($data['icon_target_id']) ? get_file_uri($data['icon_target_id']) : NULL;
   $item['additional_data'] = $data;
-
+  $item['is_disabled'] = empty($item['url']->toString()) ? TRUE : FALSE;
   $mlid = $link_plugin['metadata']['entity_id'];
   $item['attributes']->addClass('menu-icon');
   $item['attributes']->addClass('menu-icon-' . $mlid);
@@ -70,7 +69,6 @@ function get_menu_icon(array $item) {
  * Implemments hook_form_FORM_ID_alter().
  */
 function menu_icon_form_menu_link_content_menu_link_content_form_alter(&$form, FormStateInterface $form_state, $form_id) {
-  \Drupal::messenger()->addMessage($form_id);
 
   $menu_db_handler = \Drupal::service('menu_icon.db_handler');
   $data = $menu_db_handler->getMenuIconData($form_state->getFormObject()->getEntity()->id());
@@ -80,10 +78,19 @@ function menu_icon_form_menu_link_content_menu_link_content_form_alter(&$form, F
   if (!file_exists($dir)) {
     mkdir($dir, 0777, true);
   }
+  $form['enable_menu_icons'] = [
+    '#type' => 'checkbox',
+    '#title' => t("Enable menu icon for this menu item"),
+    '#description' => t('Whether to use menu icon for this menu link'),
+    '#default_value' => $data['enable_menu_icon'] ?? 0,
+  ];
 
   $form['menu_icon_module'] = [
     '#type' => 'details',
     '#title' => t('Menu Icon Configurations'),
+    '#states' => [
+      'visible' => [ ':input[name="enable_menu_icons"]' => ['checked' => TRUE],],
+    ],
     '#open' => FALSE,
   ];
 
@@ -135,25 +142,31 @@ function menu_icon_form_menu_link_content_menu_link_content_form_alter(&$form, F
  *   Takes the form state instance of the form.
  */
 function menu_icon_save_image($form, FormStateInterface $form_state) {
-  $file_id = $form_state->getValue('menu_icon')[0] ?? NULL;
-  if ($file_id) {
-    $file = \Drupal::entityTypeManager()->getStorage('file')->load($file_id);
-    $file->setPermanent();
-    $file->save();
-  }
-  $class_list = explode("\r\n", $form_state->getValue('class_list'));
-  $class_list = implode(" ", $class_list);
-
-  $data = [
-    'menu_item_id' => $form_state->getFormObject()->getEntity()->id(),
-    'icon_target_id' => $file_id,
-    'icon_alt' => $form_state->getValue('title')[0]['value'],
-    'class_list' => $class_list,
-    'show_title' => $form_state->getValue('show_title'),
-  ];
-
   $menu_db_handler = \Drupal::service('menu_icon.db_handler');
-  $menu_db_handler->setMenuIconData($data);
+  if ($form_state->getValue('enable_menu_icons') == 1) {
+    $file_id = $form_state->getValue('menu_icon')[0] ?? NULL;
+    if ($file_id) {
+      $file = \Drupal::entityTypeManager()->getStorage('file')->load($file_id);
+      $file->setPermanent();
+      $file->save();
+    }
+    $class_list = explode("\r\n", $form_state->getValue('class_list'));
+    $class_list = implode(" ", $class_list);
+  
+    $data = [
+      'enable_menu_icon' => $form_state->getValue('enable_menu_icons'),
+      'menu_item_id' => $form_state->getFormObject()->getEntity()->id(),
+      'icon_target_id' => $file_id,
+      'icon_alt' => $form_state->getValue('title')[0]['value'],
+      'class_list' => $class_list,
+      'show_title' => $form_state->getValue('show_title'),
+    ];
+  
+    $menu_db_handler->setMenuIconData($data);
+  }
+  else {
+    $menu_db_handler->deleteMenuIconData($form_state->getFormObject()->getEntity()->id());
+  }
 }
 
 /**
@@ -172,13 +185,48 @@ function menu_icon_theme() {
  * Implements hook_theme_suggestion_menu_alter().
  */
 function menu_icon_theme_suggestions_menu_alter(array &$suggestions, array $variables) {
-  $temp = 0;
-  foreach ($variables['items'] as $item) {
-    if ($item['original_link'] instanceof MenuLinkContent) {
-      $temp++;
-    }
-  }
-  if ($temp == count($variables['items'])) {
+  $menu_name = $variables['menu_name'];
+  $data = \Drupal::entityTypeManager()->getStorage('menu')->load($menu_name)->get('third_party_settings');
+  if (!empty($data) && $data['enable_menu_icons']) {
     $suggestions[] = 'menu__with__icon';
+  }
+}
+
+function menu_icon_form_alter(&$form, $form_state, $form_id) {
+  $desired_form_ids = [
+    'menu_add_form',
+    'menu_edit_form'
+  ];
+  if (in_array($form_id, $desired_form_ids)) {
+    $enabled = $form_state->getFormObject()->getEntity()->id() &&
+      !empty($form_state->getFormObject()->getEntity()->get('third_party_settings')) &&
+      isset($form_state->getFormObject()->getEntity()->get('third_party_settings')["enable_menu_icons"]) ?
+      $form_state->getFormObject()->getEntity()->get('third_party_settings')["enable_menu_icons"] : 0;
+
+    $lang_element = array_search('langcode', array_keys($form)) + 1;
+    $form = array_slice($form, 0, $lang_element, true) +
+      array('enable_menu_icons' => [
+        '#type' => 'checkbox',
+        '#title' => t("Enable menu icon for this menu item block"),
+        '#default_value' => $enabled,
+      ]) +
+    array_slice($form, $lang_element, NULL, true);
+
+    $form['actions']['submit']['#submit'][] = 'menu_icon_save_configurations';
+  }
+}
+
+function menu_icon_save_configurations($form, $form_state) {
+  if ($form_state->getValue('enable_menu_icons') == 1) {
+    $form_state->getFormObject()->getEntity()->set('third_party_settings', [
+      'enable_menu_icons' => $form_state->getValue('enable_menu_icons')
+    ])->save();
+  }
+  else {
+    $data = $form_state->getFormObject()->getEntity()->get('third_party_settings');
+    if (isset($data['enable_menu_icons'])) {
+      unset($data['enable_menu_icons']);
+      $form_state->getFormObject()->getEntity()->set('third_party_settings', $data)->save();
+    }
   }
 }

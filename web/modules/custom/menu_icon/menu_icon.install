@@ -5,6 +5,8 @@
  * Contains the required hook for install/uninstall of module.
  */
 
+use Drupal\Core\Database\Database;
+
 /**
  * Implements hook_schema().
  */
@@ -12,23 +14,29 @@ function menu_icon_schema() {
 	$schema['menu_icons'] = [
 		'description' => 'description pour la table post',
 		'fields' => [
+			'enable_menu_icon' => [
+				'type' => 'int',
+				'not null' => TRUE,
+				'default' => 0,
+				'unsigned' => TRUE,
+			],
 			'id' => [
 				'description' => 'id of the row.',
 				'type' => 'serial',
 				'size' => 'small',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
+				'unsigned' => TRUE,
+				'not null' => TRUE,
 			],
 			'menu_item_id' => [
 				'type' => 'int',
 				'unsigned' => TRUE,
-        'not null' => TRUE,
+        		'not null' => TRUE,
 				'unique' => TRUE
 			],
 			'icon_target_id' => [
 				'type' => 'int',
 				'unsigned' => TRUE,
-        'not null' => FALSE,
+        		'not null' => FALSE,
 			],
 			'icon_alt' => [
         'type' => 'varchar',
@@ -38,20 +46,50 @@ function menu_icon_schema() {
 			],
 			'class_list' => [
 				'type' => 'text', 
-        'size' => 'big',
-        'not null' => FALSE,
-        'description' => 'stores the message of user',
+				'size' => 'big',
+				'not null' => FALSE,
+				'description' => 'stores the message of user',
 			],
-		'show_title' => [
-		  'type' => 'int',
-			'not null' => TRUE,
-			'default' => 1,
-			'unsigned' => TRUE,
+		  'show_title' => [
+				'type' => 'int',
+				'not null' => TRUE,
+				'default' => 1,
+				'unsigned' => TRUE,
 			],
 		],
 		'primary key' => ['id'],
 	];
 
 	return $schema;
-    
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function menu_icon_update_8001() {
+  // Define the schema change.
+  $schema = [
+    'type' => 'int',
+		'not null' => TRUE,
+		'default' => 0,
+		'unsigned' => TRUE,
+	];
+
+  // Add the new column to the table.
+	Database::getConnection()
+    ->schema()->addField('menu_icons', 'enable_menu_icon', $schema);
+}
+
+/**
+ * Implements hook_uinstall().
+ */
+function menu_icon_uninstall() {
+	$menus = \Drupal::entityTypeManager()->getStorage('menu')->loadMultiple();
+	foreach ($menus as $menu) {
+	  $data = $menu->get('third_party_settings');
+	  if (isset($data['enable_menu_icons'])) {
+		unset($data['enable_menu_icons']);
+		$menu->set('third_party_settings', $data)->save();
+	  }
+	}
 }

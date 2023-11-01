@@ -19,7 +19,7 @@
  */
 #}
 {% import _self as menus %}
-
+{{ attach_library('menu_icon/active_inactive') }}
 {#
   We call a macro which calls itself to render the full tree.
   @see https://twig.symfony.com/doc/3.x/tags/macro.html
@@ -45,12 +45,12 @@
       %}
       <li{{ item.attributes.addClass('nav-item') }}>
       {% if item.additional_data %}
-        <a href="{{item.url}}" class="{{item.additional_data.class_list}} nav-link {{item.is_expanded ? 'dropdown-toggle'}} {{item.is_collapsed ? 'dropdown-toggle'}} {{item.in_active_trail ? 'active'}}">
+        <a href="{{item.url}}" class="{{item.additional_data.class_list}} nav-link {{item.is_expanded ? 'dropdown-toggle'}} {{item.is_collapsed ? 'dropdown-toggle'}} {{item.in_active_trail ? 'active'}} {{item.is_disabled ? 'inactive'}}">
          {% if item.icon_url %}
            <img src="{{file_url(item.icon_url)}}" alt="{{item.additional_data.icon_alt}}">
          {% endif %} 
          {% if item.additional_data.show_title == 1 %}
-           {{item.title}}
+           {{item.title|raw}}
          {% endif %}
         </a>
         {% else %}

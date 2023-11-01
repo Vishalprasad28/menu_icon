@@ -43,6 +43,7 @@ class MenuIconDatabaseHandler {
     try {
       $query = $this->connection->merge('menu_icons')->key('menu_item_id', $data['menu_item_id']);
       $query->fields([
+        'enable_menu_icon' => $data['enable_menu_icon'],
         'icon_target_id' => $data['icon_target_id'],
         'icon_alt' => $data['icon_alt'],
         'class_list' => $data['class_list'],
@@ -65,6 +66,7 @@ class MenuIconDatabaseHandler {
       if ($menu_id) {
         $query = $this->connection->select('menu_icons', 'm');
         $result = $query->fields('m', [
+          'enable_menu_icon',
           'icon_target_id',
           'icon_alt',
           'class_list',
@@ -82,6 +84,21 @@ class MenuIconDatabaseHandler {
     }
     catch (Exception $e) {
       return [];
+    }
+  }
+
+  /**
+   * Function to delete the menu icon data for a menu item.
+   */
+  public function deleteMenuIcondata($menu_id) {
+    try {
+      $query = $this->connection->delete('menu_icons');
+      $query->condition('menu_icons.menu_item_id', $menu_id)->execute();
+
+      return TRUE;
+    }
+    catch (Exception $e) {
+      return FALSE;
     }
   }
 }

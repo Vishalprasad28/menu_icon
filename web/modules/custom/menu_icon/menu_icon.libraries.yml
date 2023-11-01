@@ -1,0 +1,4 @@
+active_inactive:
+  css:
+    theme:
+      css/active-inactive.css: {}
